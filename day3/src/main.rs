@@ -146,14 +146,21 @@ fn trace_wire(wire: &Wire) -> Vec<Location> {
     path
 }
 
-fn find_closest_intersection(wire1: &Wire, wire2: &Wire) -> u64 {
+fn intersections_of(wire1: &Wire, wire2: &Wire) -> Vec<Location> {
     let trace1: HashSet<Location> = HashSet::from_iter(trace_wire(wire1));
     let trace2: HashSet<Location> = HashSet::from_iter(trace_wire(wire2));
 
     trace1
         .intersection(&trace2)
         .filter(|&&location| location != Location::default())
-        .map(|location| location.manhattan_distance(Location::default()))
+        .copied()
+        .collect()
+}
+
+fn distance_to_closest_intersection(wire1: &Wire, wire2: &Wire) -> u64 {
+    intersections_of(wire1, wire2)
+        .into_iter()
+        .map(|loc| loc.manhattan_distance(Location::default()))
         .min()
         .unwrap()
 }
@@ -162,27 +169,38 @@ fn main() -> Result<(), Box<dyn Error>> {
     let input = fs::read_to_string("inputs/day3.txt")?;
     let mut lines = input.lines();
 
-
     let wire1 = lines.next().unwrap().parse()?;
     let wire2 = lines.next().unwrap().parse()?;
 
-    let distance = find_closest_intersection(&wire1, &wire2);
-
-    println!("part 1: {}", distance);
+    println!("part 1: {}", distance_to_closest_intersection(&wire1, &wire2));
+    println!("part 2: {}", minimum_delay(&wire1, &wire2));
 
     Ok(())
 }
 
+fn steps_until(wire: &Wire, location: Location) -> usize {
+    trace_wire(wire).iter().position(|&loc| loc == location).unwrap()
+}
+
+fn minimum_delay(wire1: &Wire, wire2: &Wire) -> usize {
+    intersections_of(wire1, wire2)
+        .into_iter()
+        .map(|loc| steps_until(wire1, loc) + steps_until(wire2, loc))
+        .min()
+        .unwrap()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::find_closest_intersection;
+    use super::{distance_to_closest_intersection, minimum_delay};
 
     #[test]
     fn example1() {
         let wire1 = "R8,U5,L5,D3".parse().unwrap();
         let wire2 = "U7,R6,D4,L4".parse().unwrap();
 
-        assert_eq!(find_closest_intersection(&wire1, &wire2), 6);
+        assert_eq!(distance_to_closest_intersection(&wire1, &wire2), 6);
+        assert_eq!(minimum_delay(&wire1, &wire2), 30);
     }
 
     #[test]
@@ -190,7 +208,8 @@ mod tests {
         let wire1 = "R75,D30,R83,U83,L12,D49,R71,U7,L72".parse().unwrap();
         let wire2 = "U62,R66,U55,R34,D71,R55,D58,R83".parse().unwrap();
 
-        assert_eq!(find_closest_intersection(&wire1, &wire2), 159);
+        assert_eq!(distance_to_closest_intersection(&wire1, &wire2), 159);
+        assert_eq!(minimum_delay(&wire1, &wire2), 610);
     }
 
     #[test]
@@ -198,6 +217,7 @@ mod tests {
         let wire1 = "R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51".parse().unwrap();
         let wire2 = "U98,R91,D20,R16,D67,R40,U7,R15,U6,R7".parse().unwrap();
 
-        assert_eq!(find_closest_intersection(&wire1, &wire2), 135);
+        assert_eq!(distance_to_closest_intersection(&wire1, &wire2), 135);
+        assert_eq!(minimum_delay(&wire1, &wire2), 410);
     }
 }
