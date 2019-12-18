@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::error::Error;
 use std::fs;
 
@@ -87,6 +87,45 @@ impl Intcode {
                     output.push(self.read(self.mem[pc], modes[0]));
                     pc += 1;
                 }
+                5 => {
+                    let arg0 = self.read(self.mem[pc], modes[0]);
+                    let arg1 = self.read(self.mem[pc + 1], modes[1]);
+
+                    pc = if arg0 != 0 {
+                        arg1.try_into().unwrap()
+                    } else {
+                        pc + 2
+                    };
+                }
+                6 => {
+                    let arg0 = self.read(self.mem[pc], modes[0]);
+                    let arg1 = self.read(self.mem[pc + 1], modes[1]);
+
+                    pc = if arg0 == 0 {
+                        arg1.try_into().unwrap()
+                    } else {
+                        pc + 2
+                    };
+                }
+                7 => {
+                    let arg0 = self.read(self.mem[pc], modes[0]);
+                    let arg1 = self.read(self.mem[pc + 1], modes[1]);
+                    let dst = usize::try_from(self.mem[pc + 2]).unwrap();
+
+                    self.mem[dst] = (arg0 < arg1) as i32;
+
+                    pc += 3;
+                }
+                8 => {
+                    let arg0 = self.read(self.mem[pc], modes[0]);
+                    let arg1 = self.read(self.mem[pc + 1], modes[1]);
+                    let dst = usize::try_from(self.mem[pc + 2]).unwrap();
+
+                    self.mem[dst] = (arg0 == arg1) as i32;
+
+                    pc += 3;
+
+                }
                 99 => break,
                 unknown_opcode => unreachable!("unknown opcode: {}", unknown_opcode),
             }
@@ -111,6 +150,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     assert!(output[..output.len() - 1].iter().all(|&code| code == 0));
 
     println!("part 1: {}", output.last().unwrap());
+
+    let mut computer = Intcode::load(&program, vec![5]);
+    let output = computer.execute();
+
+    assert_eq!(output.len(), 1);
+
+    println!("part 2: {}", output[0]);
 
     Ok(())
 }
@@ -174,5 +220,96 @@ mod tests {
         let mut computer = Intcode::load("1101,100,-1,4,0", vec![]);
         computer.execute();
         assert_eq!(computer.mem[4], 99);
+    }
+
+    #[test]
+    fn position_mode_equal() {
+        let program = "3,9,8,9,10,9,4,9,99,-1,8";
+
+        let mut computer = Intcode::load(program, vec![8]);
+        assert_eq!(computer.execute(), vec![1]);
+
+
+        let mut computer = Intcode::load(program, vec![99]);
+        assert_eq!(computer.execute(), vec![0]);
+    }
+
+    #[test]
+    fn position_mode_less_than() {
+        let program = "3,9,7,9,10,9,4,9,99,-1,8";
+
+
+        let mut computer = Intcode::load(program, vec![3]);
+        assert_eq!(computer.execute(), vec![1]);
+
+
+        let mut computer = Intcode::load(program, vec![99]);
+        assert_eq!(computer.execute(), vec![0]);
+    }
+
+    #[test]
+    fn immediate_mode_equal() {
+        let program = "3,3,1108,-1,8,3,4,3,99";
+
+        let mut computer = Intcode::load(program, vec![8]);
+        assert_eq!(computer.execute(), vec![1]);
+
+
+        let mut computer = Intcode::load(program, vec![99]);
+        assert_eq!(computer.execute(), vec![0]);
+    }
+
+    #[test]
+    fn immediate_mode_less_than() {
+        let program = "3,3,1107,-1,8,3,4,3,99";
+
+        let mut computer = Intcode::load(program, vec![3]);
+        assert_eq!(computer.execute(), vec![1]);
+
+
+        let mut computer = Intcode::load(program, vec![99]);
+        assert_eq!(computer.execute(), vec![0]);
+    }
+
+    #[test]
+    fn position_mode_jump() {
+        let program = "3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9";
+
+
+        let mut computer = Intcode::load(program, vec![0]);
+        assert_eq!(computer.execute(), vec![0]);
+
+
+        let mut computer = Intcode::load(program, vec![99]);
+        assert_eq!(computer.execute(), vec![1]);
+    }
+
+    #[test]
+    fn immediate_mode_jump() {
+        let program = "3,3,1105,-1,9,1101,0,0,12,4,12,99,1";
+
+
+        let mut computer = Intcode::load(program, vec![0]);
+        assert_eq!(computer.execute(), vec![0]);
+
+
+        let mut computer = Intcode::load(program, vec![99]);
+        assert_eq!(computer.execute(), vec![1]);
+    }
+
+    #[test]
+    fn larger_example() {
+        let program = "3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,\
+            36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,\
+            20,4,20,1105,1,46,98,99";
+
+        let mut computer = Intcode::load(program, vec![3]);
+        assert_eq!(computer.execute(), vec![999]);
+
+        let mut computer = Intcode::load(program, vec![8]);
+        assert_eq!(computer.execute(), vec![1000]);
+
+        let mut computer = Intcode::load(program, vec![99]);
+        assert_eq!(computer.execute(), vec![1001]);
     }
 }
